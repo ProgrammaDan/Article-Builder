@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Article Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,500;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,500;1,8..60,700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&family=IBM+Plex+Sans+Condensed:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,700&display=swap">
+<link rel="stylesheet" href="css/editor.css">
+</head>
+<body class="mat">
+
+<div class="welcome" id="welcome">
+  <div class="welcome-card">
+    <h1>Article builder</h1>
+    <p class="lede">Lay out a project write-up from your photos and videos, then export it as a static web page.</p>
+    <ul>
+      <li>Pick the folder that holds the project's media. Subfolders are included.</li>
+      <li>Your layout saves to <code>project.json</code> in that folder as you work.</li>
+      <li>Export writes the finished page to an <code>export</code> folder inside it.</li>
+    </ul>
+    <div class="welcome-actions">
+      <button class="btn primary" id="chooseBtn">Choose project folder</button>
+      <button class="btn" id="reopenBtn" hidden>Reopen last folder</button>
+    </div>
+    <p class="note err" id="welcomeErr" hidden></p>
+    <p class="note err" id="unsupported" hidden>This needs Chrome or Edge on a desktop computer, because it reads and writes files in a folder you choose.</p>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header class="topbar">
+    <span class="brand">Article builder</span>
+    <span class="folder" id="folderName"></span>
+    <span class="status" id="saveStatus" role="status">Saved</span>
+    <span class="spacer"></span>
+    <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button class="btn" id="redoBtn" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+    <button class="btn" id="addPageBtn" title="Split the article over more than one page. Each page gets a button at the top right of every page, and its own title.">Add page</button>
+    <button class="btn" id="groupBtn" aria-pressed="false" title="Choose pictures and videos that belong together. A reader who enlarges one can then flip through the rest.">Group media</button>
+    <button class="btn" id="settingsBtn" aria-expanded="false" aria-controls="settingsPop">Article settings</button>
+    <button class="btn" id="previewBtn">Preview</button>
+    <button class="btn primary" id="exportBtn">Export</button>
+    <div class="popover" id="settingsPop" hidden>
+      <fieldset>
+        <legend>Exported page theme</legend>
+        <label><input type="radio" name="theme" value="light"> Light</label>
+        <label><input type="radio" name="theme" value="dark"> Dark</label>
+        <label><input type="radio" name="theme" value="auto"> Match the visitor's system</label>
+      </fieldset>
+      <fieldset>
+        <legend>Page width</legend>
+        <label><input type="radio" name="width" value="standard"> Standard (880px)</label>
+        <label><input type="radio" name="width" value="wide"> Wide (1120px)</label>
+        <label><input type="radio" name="width" value="custom"> Custom <input type="number" name="widthPx" id="widthPx" min="480" max="3000" step="10" aria-label="Custom page width in pixels"> px</label>
+      </fieldset>
+      <p class="hint">This is the widest the page gets; it shrinks to fit smaller screens. Every row uses the full width, text included.</p>
+      <fieldset>
+        <legend>Captions</legend>
+        <label><input type="radio" name="captions" value="left"> Left-aligned</label>
+        <label><input type="radio" name="captions" value="center"> Centered under the picture</label>
+      </fieldset>
+      <hr>
+      <fieldset>
+        <legend>Editor appearance</legend>
+        <label><input type="radio" name="editorTheme" value="light"> Light</label>
+        <label><input type="radio" name="editorTheme" value="dark"> Dark</label>
+        <label><input type="radio" name="editorTheme" value="auto"> Match this computer's system</label>
+      </fieldset>
+      <p class="hint">Only changes this editor. The exported page uses the theme chosen above.</p>
+    </div>
+  </header>
+
+  <aside class="library" aria-label="Media library">
+    <div class="lib-head">
+      <span class="lib-title">Media<span class="lib-count" id="libCount"></span></span>
+      <button class="btn small" id="rescanBtn" title="Look for new or renamed files">Rescan</button>
+    </div>
+    <div class="lib-filters">
+      <input type="search" id="libSearch" placeholder="Filter by name" aria-label="Filter media by name">
+      <label><input type="checkbox" id="libHideUsed"> Hide media already in the article</label>
+    </div>
+    <div class="lib-list" id="libList"></div>
+    <div class="lib-foot" id="libFoot" hidden>
+      <div class="lib-foot-row">
+        <span class="sel-count" id="selCount"></span>
+        <button class="btn small" id="hideSelBtn" title="Put these away in “Hidden media” at the end of this panel. The files themselves are not touched.">Hide</button>
+        <button class="btn small primary" id="unhideSelBtn" title="Bring these back into the list" hidden>Unhide</button>
+        <button class="btn small" id="clearSelBtn">Clear</button>
+      </div>
+      <div class="lib-foot-row adds">
+        <button class="btn small" id="addSlidesBtn" title="One cover picture that opens a step-by-step viewer">Add as slideshow</button>
+        <button class="btn small primary" id="addSelBtn">Add to article</button>
+      </div>
+    </div>
+    <div class="lib-resizer" id="libResizer" role="separator" aria-orientation="vertical" tabindex="0" aria-label="Media panel width. Drag, or use the left and right arrow keys." title="Drag to resize. Double-click to reset."></div>
+  </aside>
+
+  <main class="canvas mat" id="canvas">
+    <div class="page-drop-bar" id="pageDropBar" hidden>
+      <div class="page-drop-pill"><span>Drop here to move to</span><div class="page-drop-targets" id="pageDropTargets"></div></div>
+    </div>
+    <div class="page" id="page">
+      <div class="doc-head" id="docHead">
+        <div class="doc-head-text">
+          <h1 class="doc-title" id="docTitle" contenteditable="plaintext-only" spellcheck="true" data-bind="title" data-ph="Project title" data-single></h1>
+          <p class="doc-subtitle" id="docSubtitle" contenteditable="plaintext-only" spellcheck="true" data-bind="subtitle" data-ph="One-sentence summary of the project" data-single></p>
+          <p class="doc-meta" id="docMeta" contenteditable="plaintext-only" spellcheck="true" data-bind="meta" data-ph="Optional line for date, team or tools" data-single></p>
+        </div>
+        <nav class="page-nav" id="pageNav" aria-label="Pages" hidden></nav>
+        <div class="popover page-menu" id="pageMenu" role="group" aria-label="Page options" hidden>
+          <button class="tb" id="pageRenameBtn" type="button">Rename</button>
+          <button class="tb" id="pageLeftBtn" type="button">Move left</button>
+          <button class="tb" id="pageRightBtn" type="button">Move right</button>
+          <button class="tb danger" id="pageDeleteBtn" type="button">Delete page</button>
+          <p class="hint">The first page is the one visitors arrive on.</p>
+        </div>
+      </div>
+      <div id="rows"></div>
+      <div class="add-zone" id="addZone">
+        <div class="add-hint">Drop photos or videos here to start new rows, or add an empty one.</div>
+        <div class="add-buttons">
+          <button class="btn small" data-add="section">Section heading</button>
+          <button class="btn small" data-add="1">Text</button>
+          <button class="btn small" data-add="2">2 columns</button>
+          <button class="btn small" data-add="3">3 columns</button>
+          <button class="btn small" data-add="4">4 columns</button>
+          <button class="btn small" id="addLinkBtn" title="A YouTube video, or a picture or video file on the web">From a link</button>
+        </div>
+        <div class="outline-offer" id="outlineOffer" hidden>
+          Not sure how to structure it? <button class="linkish" id="outlineBtn">Add a suggested outline</button>
+        </div>
+      </div>
+      <nav class="page-nav page-nav-foot" id="pageNavFoot" aria-label="Pages, at the end" hidden></nav>
+    </div>
+  </main>
+
+  <div class="group-bar" id="groupBar" role="region" aria-label="Group media" hidden>
+    <span class="group-hint" id="groupHint" role="status"></span>
+    <span class="spacer"></span>
+    <button class="btn small" id="groupUngroupBtn" title="Break up the group being changed">Ungroup</button>
+    <button class="btn small" id="groupCancelBtn">Cancel</button>
+    <button class="btn small primary" id="groupDoneBtn">Done</button>
+  </div>
+
+  <section class="slides-panel mat" id="slidesPanel" aria-labelledby="slidesTitle" hidden>
+    <div class="slides-bar">
+      <h2 id="slidesTitle">Slideshow steps<span class="lib-count" id="slidesCount"></span></h2>
+      <span class="hint">Visitors start at step 1 and move through in this order. Drag a picture to reorder it.</span>
+      <span class="spacer"></span>
+      <button class="btn primary" id="slidesDoneBtn">Done</button>
+    </div>
+    <div class="slides-list" id="slidesList"></div>
+  </section>
+</div>
+
+<div class="textbar" id="textbar" role="toolbar" aria-label="Text formatting" hidden>
+  <select id="textFont" aria-label="Font" title="Font for the selected text, or for what you type next. A title or heading takes one font for the whole line."></select>
+  <button data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+  <button data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+  <button data-cmd="h3" title="Subheading">Subheading</button>
+  <button data-cmd="ul" title="Bulleted list">Bullets</button>
+  <button data-cmd="ol" title="Numbered list">Numbers</button>
+  <button data-cmd="code" title="Inline code">Code</button>
+  <button data-cmd="link" title="Link">Link</button>
+</div>
+
+<div class="overlay mat" id="preview" hidden>
+  <div class="overlay-bar">
+    <span class="brand">Preview</span>
+    <div class="seg" role="group" aria-label="Preview width" style="margin-left:12px">
+      <button class="tb on" data-dev="desktop" aria-pressed="true">Desktop</button>
+      <button class="tb" data-dev="phone" aria-pressed="false">Phone</button>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn" id="closePreviewBtn">Close preview</button>
+  </div>
+  <div class="preview-stage" id="previewStage"><iframe id="previewFrame" title="Article preview"></iframe></div>
+</div>
+
+<div class="overlay mat" id="markup" hidden>
+  <div class="overlay-bar markup-bar">
+    <span class="brand">Mark up</span>
+    <span class="folder" id="markupName"></span>
+    <span class="spacer"></span>
+    <button class="btn primary" id="markupDoneBtn">Done</button>
+    <div class="mk-tools">
+      <div class="mk-group" role="group" aria-label="Line color"><span class="tb-label">Line</span><span class="swatches" id="mkLineColors"></span></div>
+      <div class="mk-group" role="group" aria-label="Text color"><span class="tb-label">Text</span><span class="swatches" id="mkTextColors"></span></div>
+      <div class="mk-group" title="Applies to the selected text, or to what you type next. With no text box open, it applies to the whole selected label.">
+        <label class="tb-label" for="mkFont">Font</label>
+        <select id="mkFont"></select>
+        <label class="tb-label" for="mkFontSize">Size</label>
+        <input type="number" id="mkFontSize" min="6" max="300" step="1" title="Text height in thousandths of the image’s width, so it scales with the picture. 26 is a medium label.">
+        <button class="tb mk-style" id="mkBold" aria-pressed="false" title="Bold (Ctrl+B)" aria-label="Bold"><b>B</b></button>
+        <button class="tb mk-style" id="mkItalic" aria-pressed="false" title="Italic (Ctrl+I)" aria-label="Italic"><i>I</i></button>
+      </div>
+      <div class="mk-group" title="Applies to every line on this image"><span class="tb-label">Line weight</span><div class="seg" id="mkSizes" role="group" aria-label="Weight of all lines on this image"></div></div>
+      <button class="btn small" id="mkResetBtn" title="Put the label back at the end of its line, as wide as its text" disabled>Reset label box</button>
+      <button class="btn small" id="mkDeleteBtn" disabled>Delete line</button>
+    </div>
+  </div>
+  <div class="markup-stage" id="markupStage">
+    <div class="mk-fig">
+      <img id="mkImg" alt="" draggable="false">
+      <div class="marks-layer" id="mkMarks"></div>
+      <svg class="mk-ui" id="mkUI" preserveAspectRatio="none"></svg>
+      <div class="mark-edit" id="mkEdit" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Label text" hidden></div>
+    </div>
+  </div>
+  <div class="markup-hint" id="markupHint" role="status"></div>
+</div>
+
+<dialog class="modal" id="linkDialog" aria-labelledby="linkTitle">
+  <h2 id="linkTitle">Use a link</h2>
+  <p>Paste the address of a YouTube video, or of a picture or video file on the web, such as a Cloudflare R2 public link. It isn’t copied into your folder: the published page loads it from there.</p>
+  <input class="link-input" id="linkInput" type="text" inputmode="url" placeholder="https://" spellcheck="false" autocomplete="off" aria-label="Address" aria-describedby="linkErr">
+  <p class="link-err" id="linkErr" role="alert" hidden></p>
+  <div class="modal-actions"><button class="btn" id="linkCancelBtn">Cancel</button><button class="btn primary" id="linkAddBtn">Add</button></div>
+</dialog>
+
+<dialog class="modal" id="exportConfirm" aria-labelledby="exportConfirmTitle">
+  <h2 id="exportConfirmTitle">Export the article?</h2>
+  <p id="exportConfirmText"></p>
+  <div class="modal-actions"><button class="btn" id="exportCancelBtn">Cancel</button><button class="btn primary" id="exportGoBtn">Export</button></div>
+</dialog>
+
+<dialog class="modal" id="exportDialog">
+  <h2 id="exportTitle">Exporting</h2>
+  <div id="exportBody"></div>
+  <progress id="exportProg" max="1" value="0"></progress>
+  <div class="modal-actions"><button class="btn" id="exportCloseBtn" disabled>Close</button></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<!-- Ordinary scripts, loaded in this order and sharing one scope. app.js starts the app, so it comes last. -->
+<script src="js/core.js"></script>
+<script src="js/sanitize.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/links.js"></script>
+<script src="js/marks.js"></script>
+<script src="js/project.js"></script>
+<script src="js/mutations.js"></script>
+<script src="js/render.js"></script>
+<script src="js/slides.js"></script>
+<script src="js/library.js"></script>
+<script src="js/dnd.js"></script>
+<script src="js/text-editing.js"></script>
+<script src="js/rich-text.js"></script>
+<script src="js/markup.js"></script>
+<script src="js/template.js"></script>
+<script src="js/article.js"></script>
+<script src="js/export.js"></script>
+<script src="js/groups.js"></script>
+<script src="js/pages.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
